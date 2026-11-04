@@ -1,0 +1,42 @@
+{
+  "name": "morlyiq-backend",
+  "version": "1.0.0",
+  "description": "Backend API server for MorlyIQ with Express and MongoDB",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "seed:admin": "node src/scripts/admin/seedSuperAdmin.js",
+    "seed:admin-roles": "node src/scripts/admin/seedRoles.js",
+    "seed:admin-features": "node src/scripts/admin/seedFeatures.js",
+    "seed:admin-cdt": "node src/scripts/admin/seedCdtCodes.js",
+    "seed:admin-plans": "node src/scripts/admin/seedPlansAndCoupons.js",
+    "seed:client-user": "node src/scripts/client/seedUser.js",
+    "seed:client-patients": "node src/scripts/client/seedPatients.js",
+    "migrate:clinic-providers": "node src/scripts/client/consolidateClinicProviders.js"
+  },
+  "keywords": [
+    "morlyiq",
+    "express",
+    "mongodb",
+    "mongoose",
+    "dental-saas"
+  ],
+  "author": "FutureDesk",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^18.0.4",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.10.3",
+    "morgan": "^1.12.1",
+    "nodemailer": "^10.0.15",
+    "stripe": "^23.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
