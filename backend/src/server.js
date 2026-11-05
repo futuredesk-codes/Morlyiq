@@ -23,9 +23,10 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Configure CORS
-const allowedOrigins = process.env.CLIENT_URL
-  ? process.env.CLIENT_URL.split(",")
-  : ["http://localhost:5173", "http://localhost:5174"];
+const allowedOrigins = (process.env.CLIENT_URL || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 app.use(
   cors({
@@ -34,7 +35,7 @@ app.use(
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
-      return callback(null, true); // Dev-friendly fallback
+      return callback(null, false);
     },
     credentials: true,
   })
