@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { getPlatformSettings } from "../services/admin/platformSettingsService.js";
 
 const clientSchema = new mongoose.Schema(
   {
@@ -33,6 +34,8 @@ const clientSchema = new mongoose.Schema(
       enum: ["invited", "active", "trial", "past_due", "suspended", "archived"],
       default: "trial",
     },
+    trialStartedAt: { type: Date, default: null },
+    trialEndsAt: { type: Date, default: null },
     mrr: {
       type: Number,
       default: 0,
@@ -70,5 +73,12 @@ const clientSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+clientSchema.pre("validate", async function initializeTrial() {
+  if (this.status !== "trial" || this.trialEndsAt) return;
+  const settings = await getPlatformSettings();
+  this.trialStartedAt = this.trialStartedAt || new Date();
+  this.trialEndsAt = new Date(this.trialStartedAt.getTime() + (settings.trialLengthDays ?? 14) * 86400000);
+});
 
 export const Client = mongoose.model("Client", clientSchema);

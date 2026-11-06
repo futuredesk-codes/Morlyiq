@@ -7,6 +7,8 @@ import { PlatformInsurer } from "../../../models/admin/PlatformInsurer.js";
 import { BillingInvoice } from "../../../models/client/BillingInvoice.js";
 import { EligibilityCheck } from "../../../models/client/EligibilityCheck.js";
 import { StediPayer } from "../../../models/integrations/StediPayer.js";
+import { roleHasPermission } from "../../../services/admin/roleService.js";
+import { adminLeadScope } from "../../../services/admin/leadAccessService.js";
 
 const startOfMonth = () => {
   const date = new Date();
@@ -78,6 +80,19 @@ const insurerIssueCount = async () => {
 };
 
 export const getAdminDashboardStats = async (req, res) => {
+  const superAdmin = req.adminRole?.roleName === "Super Admin";
+  // Platform pages (clients/plans/billing/tickets/insurers/audit) remain
+  // Super Admin-only. Dashboard access alone never grants their data.
+  const visibility = {
+    revenue: superAdmin,
+    clients: superAdmin,
+    verifications: roleHasPermission(req.adminRole, "eligibility", "view"),
+    support: superAdmin,
+    plans: superAdmin,
+    leads: roleHasPermission(req.adminRole, "leads", "view"),
+    recentActivity: superAdmin,
+    insurerIssues: superAdmin,
+  };
   const clientScoped = req.adminRole?.roleName === "Client Admin";
   let assignedClient = null;
   if (clientScoped) {
@@ -100,19 +115,20 @@ export const getAdminDashboardStats = async (req, res) => {
   const auditQuery = assignedClient ? { clientId: assignedClient._id } : {};
   const seriesStart = startOfUtcDay();
   seriesStart.setUTCDate(seriesStart.getUTCDate() - 6);
+  const leadScope = visibility.leads ? await adminLeadScope(req) : null;
 
   const [clients, plans, verificationCount, recentChecks, openTickets, recentTickets, failedBilling, invoiceFailures, leads, auditLogs, issues] = await Promise.all([
-    Client.find(clientQuery).select("name planId status mrr createdAt billing.paymentStatus").lean(),
-    Plan.find().select("key name").sort({ name: 1 }).lean(),
-    EligibilityCheck.countDocuments({ ...tenantQuery, checkedAt: { $gte: startOfMonth() } }),
-    EligibilityCheck.find({ ...tenantQuery, checkedAt: { $gte: seriesStart } }).select("checkedAt").lean(),
-    Ticket.countDocuments(ticketQuery),
-    Ticket.find({ ...(assignedClient ? { client: assignedClient.name } : {}), createdAt: { $gte: seriesStart } }).select("createdAt").lean(),
-    Client.countDocuments({ ...clientQuery, "billing.paymentStatus": "failed" }),
-    BillingInvoice.countDocuments({ ...tenantQuery, status: "uncollectible" }),
-    clientScoped ? [] : Lead.find().select("status").lean(),
-    AuditLog.find(auditQuery).sort({ createdAt: -1 }).limit(5).lean(),
-    clientScoped ? 0 : insurerIssueCount(),
+    visibility.clients ? Client.find(clientQuery).select("name planId status mrr createdAt billing.paymentStatus").lean() : [],
+    visibility.plans ? Plan.find().select("key name").sort({ name: 1 }).lean() : [],
+    visibility.verifications ? EligibilityCheck.countDocuments({ ...tenantQuery, checkedAt: { $gte: startOfMonth() } }) : 0,
+    visibility.verifications ? EligibilityCheck.find({ ...tenantQuery, checkedAt: { $gte: seriesStart } }).select("checkedAt").lean() : [],
+    visibility.support ? Ticket.countDocuments(ticketQuery) : 0,
+    visibility.support ? Ticket.find({ ...(assignedClient ? { client: assignedClient.name } : {}), createdAt: { $gte: seriesStart } }).select("createdAt").lean() : [],
+    visibility.revenue ? Client.countDocuments({ ...clientQuery, "billing.paymentStatus": "failed" }) : 0,
+    visibility.revenue ? BillingInvoice.countDocuments({ ...tenantQuery, status: "uncollectible" }) : 0,
+    visibility.leads ? Lead.find(leadScope).select("status").lean() : [],
+    visibility.recentActivity ? AuditLog.find(auditQuery).sort({ createdAt: -1 }).limit(5).lean() : [],
+    visibility.insurerIssues ? insurerIssueCount() : 0,
   ]);
 
   const activeClients = clients.filter((client) => client.status === "active").length;
@@ -127,37 +143,36 @@ export const getAdminDashboardStats = async (req, res) => {
     data: {
       generatedAt: new Date().toISOString(),
       scope: clientScoped ? "client" : "platform",
+      visibility,
       kpis: {
-        monthlyRecurringRevenue: mrr,
-        activeClients,
-        trialClients,
-        verificationsThisMonth: verificationCount,
-        openTickets,
-        overdueInvoices,
-        insurerIssues: issues,
+        ...(visibility.revenue ? { monthlyRecurringRevenue: mrr, overdueInvoices } : {}),
+        ...(visibility.clients ? { activeClients, trialClients } : {}),
+        ...(visibility.verifications ? { verificationsThisMonth: verificationCount } : {}),
+        ...(visibility.support ? { openTickets } : {}),
+        ...(visibility.insurerIssues ? { insurerIssues: issues } : {}),
         series: {
-          revenue: monthlyClientSeries(clients, (client) => Number(client.mrr || 0)),
-          activeClients: monthlyClientSeries(clients, (client) => client.status === "active" ? 1 : 0),
-          verifications: dailySeries(recentChecks, "checkedAt"),
-          tickets: dailySeries(recentTickets, "createdAt"),
+          ...(visibility.revenue ? { revenue: monthlyClientSeries(clients, (client) => Number(client.mrr || 0)) } : {}),
+          ...(visibility.clients ? { activeClients: monthlyClientSeries(clients, (client) => client.status === "active" ? 1 : 0) } : {}),
+          ...(visibility.verifications ? { verifications: dailySeries(recentChecks, "checkedAt") } : {}),
+          ...(visibility.support ? { tickets: dailySeries(recentTickets, "createdAt") } : {}),
         },
       },
-      plans: plans.map((plan) => ({
+      ...(visibility.plans ? { plans: plans.map((plan) => ({
         id: String(plan._id),
         key: plan.key,
         name: plan.name,
         count: planCounts.get(plan.key) || planCounts.get(String(plan._id)) || 0,
-      })),
-      leadFunnel: LEAD_STATUSES.map((status) => ({
+      })) } : {}),
+      ...(visibility.leads ? { leadFunnel: LEAD_STATUSES.map((status) => ({
         status,
         count: leads.filter((lead) => lead.status === status).length,
-      })),
-      recentActivity: auditLogs.map((log) => ({
+      })) } : {}),
+      ...(visibility.recentActivity ? { recentActivity: auditLogs.map((log) => ({
         id: String(log._id),
         kind: activityKind(log),
         text: log.target ? `${log.action} — ${log.target}` : log.action,
         time: timeAgo(log.createdAt),
-      })),
+      })) } : {}),
     },
   });
 };

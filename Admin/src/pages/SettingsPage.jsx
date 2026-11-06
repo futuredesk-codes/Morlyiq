@@ -14,6 +14,7 @@ import { Modal } from "../components/common/Modal.jsx";
 import {
   fetchPlatformSettingsApi,
   updateSuperAdminMfaApi,
+  updatePlatformSettingsApi,
 } from "../services/settingsService.js";
 
 function RowToggle({ label, desc, on, onChange, disabled = false }) {
@@ -61,12 +62,22 @@ export default function SettingsPage() {
   const [requireSsoLinks, setRequireSsoLinks] = useState(false);
   const [supportEmail, setSupportEmail] = useState("support@dentalverify.ai");
   const [trialLength, setTrialLength] = useState(14);
+  const [settingsReady, setSettingsReady] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+
+  function applySettings(settings) {
+    setRequireMfa(Boolean(settings.security?.requireMfaForSuperAdmins));
+    setMaintenance(Boolean(settings.maintenanceMode));
+    setAllowSignups(settings.allowSignups !== false);
+    setSupportEmail(settings.supportEmail || "");
+    setTrialLength(settings.trialLengthDays ?? 14);
+  }
 
   useEffect(() => {
     let active = true;
     fetchPlatformSettingsApi()
       .then((settings) => {
-        if (active) setRequireMfa(Boolean(settings.security?.requireMfaForSuperAdmins));
+        if (active) { applySettings(settings); setSettingsReady(true); }
       })
       .catch((error) => {
         if (active) push(error.message, "danger");
@@ -103,8 +114,15 @@ export default function SettingsPage() {
     }
   }
 
-  function saveSettings() {
-    push("Platform settings saved");
+  async function saveSettings() {
+    if (!settingsReady || settingsSaving) return;
+    setSettingsSaving(true);
+    try {
+      const settings = await updatePlatformSettingsApi({ supportEmail: supportEmail.trim(), trialLengthDays: trialLength, verificationProvider: "stedi", maintenanceMode: maintenance, allowSignups });
+      applySettings(settings);
+      push("Platform settings saved");
+    } catch (error) { push(error.message, "danger"); }
+    finally { setSettingsSaving(false); }
   }
 
   const chain = [
@@ -121,8 +139,8 @@ export default function SettingsPage() {
         title="Platform Settings"
         subtitle="Global configuration for MorlyIQ"
         action={
-          <Btn icon={Check} onClick={saveSettings}>
-            Save changes
+          <Btn icon={Check} onClick={saveSettings} disabled={!settingsReady || settingsSaving || mfaSaving}>
+            {settingsSaving ? "Saving..." : "Save changes"}
           </Btn>
         }
       />
@@ -183,19 +201,21 @@ export default function SettingsPage() {
             desc="Record every denied request — tenant mismatch, disabled feature or missing permission."
             on={logFailedAuth}
             onChange={setLogFailedAuth}
+            disabled
           />
           <RowToggle
             label="Require SSO for external links where supported"
             desc="Block adding a client link with stored third-party credentials."
             on={requireSsoLinks}
             onChange={setRequireSsoLinks}
+            disabled
           />
           <RowToggle
             label="Require MFA for all Super Admins"
             desc={mfaLoading ? "Loading security policyâ€¦" : "Enforce an emailed 6-digit verification code after password login for every Super Admin."}
             on={requireMfa}
             onChange={requestMfaChange}
-            disabled={mfaLoading || mfaSaving}
+            disabled={mfaLoading || mfaSaving || settingsSaving}
           />
         </div>
       </Card>
@@ -220,18 +240,21 @@ export default function SettingsPage() {
               desc="Take the client portal offline for scheduled maintenance."
               on={maintenance}
               onChange={setMaintenance}
+              disabled={!settingsReady || settingsSaving}
             />
             <RowToggle
               label="Allow new signups"
-              desc="Permit new practices to start a trial from the marketing site."
+              desc="Allow creating and inviting new clients. Existing invitations can still be completed."
               on={allowSignups}
               onChange={setAllowSignups}
+              disabled={!settingsReady || settingsSaving}
             />
             <RowToggle
               label="Auto-suspend on failed payment"
               desc="Suspend a client automatically after 3 failed payment retries."
               on={autoSuspend}
               onChange={setAutoSuspend}
+              disabled
             />
           </div>
         </Card>
@@ -250,23 +273,27 @@ export default function SettingsPage() {
           </div>
           <Field label="Support email">
             <Input
+              type="email"
+              maxLength={254}
+              disabled={!settingsReady || settingsSaving}
               value={supportEmail}
               onChange={(e) => setSupportEmail(e.target.value)}
             />
           </Field>
-          <Field label="Trial length (days)">
+          <Field label="Trial length (days)" hint="Applies to new trials. Existing dated trials and paid Stripe subscriptions are unchanged.">
             <Input
               type="number"
+              min={1}
+              max={365}
+              step={1}
+              disabled={!settingsReady || settingsSaving}
               value={trialLength}
               onChange={(e) => setTrialLength(Number(e.target.value))}
             />
           </Field>
-          <Field label="Default verification provider">
-            <Select defaultValue="clearinghouse">
-              <option value="clearinghouse">
-                Clearinghouse (auto-select)
-              </option>
-              <option value="direct">Direct payer API when available</option>
+          <Field label="Default verification provider" hint="Current eligibility integration. Additional providers are not configured.">
+            <Select value="stedi" disabled>
+              <option value="stedi">Stedi</option>
             </Select>
           </Field>
         </Card>

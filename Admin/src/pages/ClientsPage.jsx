@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Pencil, Ban, RotateCcw, Archive, Building2, Copy, Mail } from "lucide-react";
 import { C } from "../constants/theme.js";
 import { FEATURES, FEATURE_MAP } from "../constants/features.js";
@@ -17,8 +18,11 @@ import {
 import { useAdmin } from "../store/useAdmin.js";
 import { createClientApi, fetchClientsApi, updateClientApi } from "../services/clientService.js";
 import { fetchPlansApi } from "../services/planService.js";
+import { fetchPlatformSettingsApi } from "../services/settingsService.js";
 
 export default function ClientsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedClientId = searchParams.get("clientId");
   const { clients, setClients, plans, setPlans, push, logAudit } = useAdmin();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -29,15 +33,28 @@ export default function ClientsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [inviteResult, setInviteResult] = useState(null);
+  const [allowSignups, setAllowSignups] = useState(false);
+
+  useEffect(() => {
+    if (!requestedClientId || loading) return;
+    const selected = clients.find((client) => client.id === requestedClientId);
+    if (selected) setDetail(selected);
+  }, [requestedClientId, clients, loading]);
+
+  function closeDetail() {
+    setDetail(null);
+    if (requestedClientId) setSearchParams((previous) => { const next = new URLSearchParams(previous); next.delete("clientId"); return next; }, { replace: true });
+  }
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    Promise.all([fetchClientsApi(), fetchPlansApi()])
-      .then(([clientRows, planRows]) => {
+    Promise.all([fetchClientsApi(), fetchPlansApi(), fetchPlatformSettingsApi()])
+      .then(([clientRows, planRows, settings]) => {
         if (!active) return;
         setClients(clientRows);
         setPlans(planRows);
+        setAllowSignups(settings.allowSignups !== false);
       })
       .catch((error) => {
         if (!active) return;
@@ -142,7 +159,7 @@ export default function ClientsPage() {
         title="Clients"
         subtitle={`${clients.length} tenant practices on the platform`}
         action={
-          <Btn icon={Plus} disabled={loading || saving} onClick={() => setCreating(true)}>
+          <Btn icon={Plus} disabled={loading || saving || !allowSignups} title={allowSignups ? "Add client" : "New client signups are disabled in Platform Settings"} onClick={() => setCreating(true)}>
             Add client
           </Btn>
         }
@@ -295,10 +312,10 @@ export default function ClientsPage() {
       {detail && (
         <Modal
           title={detail.name}
-          onClose={() => setDetail(null)}
+          onClose={closeDetail}
           width={640}
           footer={
-            <Btn variant="outline" onClick={() => setDetail(null)}>
+            <Btn variant="outline" onClick={closeDetail}>
               Close
             </Btn>
           }

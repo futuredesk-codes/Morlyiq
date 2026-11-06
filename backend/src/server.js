@@ -7,6 +7,7 @@ import apiRoutes from "./routes/index.js";
 import { notFoundHandler, errorHandler } from "./middlewares/errorHandler.js";
 import { stripeWebhook } from "./controllers/client/onboarding/onboardingController.js";
 import { assertStediRuntimeSafety } from "./config/stediRuntime.js";
+import { startLeadReminderScheduler } from "./services/admin/leadReminderService.js";
 
 // Load environment variables
 dotenv.config();
@@ -18,6 +19,7 @@ assertStediRuntimeSafety();
 
 // Connect to MongoDB
 connectDB();
+startLeadReminderScheduler();
 
 const app = express();
 const PORT = process.env.PORT || 5000;

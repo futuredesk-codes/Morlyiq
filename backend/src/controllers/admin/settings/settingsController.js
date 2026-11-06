@@ -1,14 +1,50 @@
 import { AdminUser } from "../../../models/admin/AdminUser.js";
-import { getPlatformSettings } from "../../../services/admin/platformSettingsService.js";
+import { getPlatformSettings, publicPlatformSettings } from "../../../services/admin/platformSettingsService.js";
+import { PlatformSettings } from "../../../models/admin/PlatformSettings.js";
+import { recordAdminAuditSafely } from "../../../services/admin/auditService.js";
 import { attempts } from "../../../services/client/attemptGuard.js";
 import { isEmailConfigured } from "../../../services/client/emailService.js";
 
 const responseData = (settings) => ({
+  ...publicPlatformSettings(settings),
   security: {
     requireMfaForSuperAdmins: Boolean(settings.security?.requireMfaForSuperAdmins),
   },
   updatedAt: settings.updatedAt,
 });
+
+export const updateSettings = async (req, res) => {
+  const body = req.body || {};
+  const allowed = ["supportEmail", "trialLengthDays", "verificationProvider", "maintenanceMode", "allowSignups"];
+  if (!Object.keys(body).length || Object.keys(body).some((key) => !allowed.includes(key))) {
+    return res.status(422).json({ success: false, message: "Provide supported platform settings only" });
+  }
+  const changes = {};
+  if (body.supportEmail !== undefined) {
+    if (typeof body.supportEmail !== "string" || body.supportEmail.trim().length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.supportEmail.trim())) {
+      return res.status(422).json({ success: false, message: "Enter a valid support email" });
+    }
+    changes.supportEmail = body.supportEmail.trim().toLowerCase();
+  }
+  if (body.trialLengthDays !== undefined) {
+    if (!Number.isInteger(body.trialLengthDays) || body.trialLengthDays < 1 || body.trialLengthDays > 365) {
+      return res.status(422).json({ success: false, message: "Trial length must be a whole number between 1 and 365 days" });
+    }
+    changes.trialLengthDays = body.trialLengthDays;
+  }
+  for (const key of ["maintenanceMode", "allowSignups"]) {
+    if (body[key] === undefined) continue;
+    if (typeof body[key] !== "boolean") return res.status(422).json({ success: false, message: `${key} must be true or false` });
+    changes[key] = body[key];
+  }
+  if (body.verificationProvider !== undefined && body.verificationProvider !== "stedi") {
+    return res.status(422).json({ success: false, message: "Stedi is the currently supported verification provider" });
+  }
+  await getPlatformSettings();
+  const settings = await PlatformSettings.findOneAndUpdate({ key: "global" }, { $set: { ...changes, verificationProvider: "stedi", updatedBy: req.adminUser._id } }, { returnDocument: "after", runValidators: true });
+  await recordAdminAuditSafely({ user: req.adminUser, roleName: req.adminRole.roleName, action: "Platform settings updated", target: Object.keys(changes).join(", "), req });
+  return res.json({ success: true, message: "Platform settings saved", data: responseData(settings) });
+};
 
 export const getSettings = async (_req, res) => {
   const settings = await getPlatformSettings();

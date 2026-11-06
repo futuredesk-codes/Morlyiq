@@ -17,6 +17,7 @@ import insurerRoutes from "./insurers/insurerRoutes.js";
 import notificationRoutes from "./notifications/notificationRoutes.js";
 import reportRoutes from "./reports/reportRoutes.js";
 import dashboardRoutes from "./dashboard/dashboardRoutes.js";
+import searchRoutes from "./search/searchRoutes.js";
 import { protectAdmin, requireAdminRoles } from "../../middlewares/admin/adminAuth.js";
 
 // All Admin Console (Admin) API routes. Mounted at /api (keeps /api/auth, /api/clients, /api/tickets).
@@ -25,6 +26,7 @@ const router = express.Router();
 
 router.use("/auth", authRoutes);
 router.use(protectAdmin);
+router.use("/search", searchRoutes);
 const superAdminOnly = requireAdminRoles("Super Admin");
 router.use("/clients", superAdminOnly, clientRoutes);
 router.use("/features", superAdminOnly, featureRoutes);

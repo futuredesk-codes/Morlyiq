@@ -209,7 +209,7 @@ function TicketDetailModal({ ticket, onClose }) {
 }
 
 export default function SupportPage() {
-  const { tickets, setTickets, push, clinicId, clinics, currentUser } = useApp();
+  const { tickets, setTickets, push, clinicId, clinics, currentUser, platformSettings } = useApp();
   const isOwner = Boolean(currentUser?.isOwner); // sees every clinic's tickets at once
   const clinicName = (id) => clinics.find((c) => c.id === id)?.name;
   const [creating, setCreating] = useState(false);
@@ -324,6 +324,7 @@ export default function SupportPage() {
       />
 
       {/* Filter and Search Bar */}
+      {platformSettings?.supportEmail && <p className="text-sm text-textMute mb-4">Email support: <a className="text-brand-blue underline" href={`mailto:${platformSettings.supportEmail}`}>{platformSettings.supportEmail}</a></p>}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         {/* Status Tabs */}
         <div className="flex items-center gap-1.5 p-1 bg-slate-100/80 rounded-[10px] w-fit overflow-x-auto">

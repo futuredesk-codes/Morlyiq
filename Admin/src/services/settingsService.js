@@ -30,6 +30,7 @@ async function request(path, options = {}) {
 }
 
 export const fetchPlatformSettingsApi = () => request("");
+export const updatePlatformSettingsApi = (settings) => request("", { method: "PUT", body: JSON.stringify(settings) });
 
 export const updateSuperAdminMfaApi = ({ enabled, password }) => request("/security/super-admin-mfa", {
   method: "PUT",

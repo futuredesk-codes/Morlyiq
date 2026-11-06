@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { loginDestination } from "../utils/loginDestination.js";
 import { useAdmin } from "../store/useAdmin.js";
 import { AppLayout } from "../components/layout/AppLayout.jsx";
 import { fetchAdminProfile } from "../services/authService.js";
@@ -27,6 +28,7 @@ import AuditPage from "../pages/AuditPage.jsx";
 import SettingsPage from "../pages/SettingsPage.jsx";
 
 function ProtectedRoute({ children }) {
+  const location = useLocation();
   const { authed, logout, setCurrentUser } = useAdmin();
   const [checking, setChecking] = useState(authed);
 
@@ -61,15 +63,16 @@ function ProtectedRoute({ children }) {
     );
   }
   if (!authed) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/login" state={{ from: `${location.pathname}${location.search}` }} replace />;
   }
   return children;
 }
 
 function PublicRoute({ children }) {
+  const location = useLocation();
   const { authed } = useAdmin();
   if (authed) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={loginDestination(location.state?.from)} replace />;
   }
   return children;
 }

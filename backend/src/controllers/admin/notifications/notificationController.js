@@ -1,11 +1,12 @@
 import mongoose from "mongoose";
 import { AdminNotification } from "../../../models/admin/AdminNotification.js";
 import { Lead } from "../../../models/admin/Lead.js";
+import { Client } from "../../../models/Client.js";
 import { Ticket } from "../../../models/Ticket.js";
 import { roleHasPermission } from "../../../services/admin/roleService.js";
 import { notifyAdminSafely } from "../../../services/admin/notificationService.js";
 
-const visibilityQuery = (req) => {
+const visibilityQuery = async (req) => {
   const userId = req.adminUser._id;
   const roleName = req.adminRole.roleName;
   const now = new Date();
@@ -30,6 +31,22 @@ const visibilityQuery = (req) => {
         { requiredPermission: { $in: permissions } },
       ],
     });
+    // Reminder access follows current lead ownership, role and tenant, even if
+    // permissions or ownership changed after the reminder was generated.
+    let sourceIds = [];
+    if (roleHasPermission(req.adminRole, "leads", "view") && roleHasPermission(req.adminRole, "tasks", "view")) {
+      const scope = { ownerId: userId };
+      if (roleName === "Client Admin") {
+        const client = await Client.findOne({ name: req.adminUser.client }).select("_id").lean();
+        scope.clientId = client?._id || null;
+        if (!client) scope._id = null;
+      }
+      const leads = await Lead.find(scope).select("activities._id activities.type activities.completedAt").lean();
+      sourceIds = leads.flatMap((lead) => (lead.activities || [])
+        .filter((entry) => ["task", "followup"].includes(entry.type) && !entry.completedAt)
+        .map((entry) => `${lead._id}:${entry._id}`));
+    }
+    query.$and.push({ $or: [{ sourceType: { $ne: "lead_activity" } }, { sourceId: { $in: sourceIds } }] });
     query.$and.push({
       $or: [
         { clientName: "" },
@@ -101,7 +118,7 @@ const reconcileCurrentWork = async (req) => {
 export const listNotifications = async (req, res) => {
   await reconcileCurrentWork(req);
   const limit = Math.min(Math.max(Number(req.query.limit) || 30, 1), 50);
-  const query = visibilityQuery(req);
+  const query = await visibilityQuery(req);
   const [notifications, unreadCount] = await Promise.all([
     AdminNotification.find(query).sort({ createdAt: -1 }).limit(limit).lean(),
     AdminNotification.countDocuments({ ...query, "readBy.userId": { $ne: req.adminUser._id } }),
@@ -122,7 +139,7 @@ export const markNotificationRead = async (req, res) => {
   }
   const notification = await AdminNotification.findOne({
     _id: req.params.id,
-    ...visibilityQuery(req),
+    ...await visibilityQuery(req),
   });
   if (!notification) {
     return res.status(404).json({ success: false, code: "NOTIFICATION_NOT_FOUND", message: "Notification not found" });
@@ -136,7 +153,7 @@ export const markNotificationRead = async (req, res) => {
 
 export const markAllNotificationsRead = async (req, res) => {
   const result = await AdminNotification.updateMany(
-    { ...visibilityQuery(req), "readBy.userId": { $ne: req.adminUser._id } },
+    { ...await visibilityQuery(req), "readBy.userId": { $ne: req.adminUser._id } },
     { $push: { readBy: { userId: req.adminUser._id, readAt: new Date() } } }
   );
   return res.status(200).json({

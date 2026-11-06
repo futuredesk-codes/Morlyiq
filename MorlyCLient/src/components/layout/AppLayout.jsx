@@ -10,7 +10,7 @@ import { fetchNotificationsApi } from "../../services/notificationService";
 import { SessionLoader } from "../common/SessionLoader";
 
 export function AppLayout() {
-  const { authed, token, logout, role, clinicId, clinics, setClinics, toasts, sidebarOpen, setSidebarOpen, setNotifications } = useApp();
+  const { authed, token, logout, role, clinicId, setClinics, toasts, sidebarOpen, setSidebarOpen, setNotifications, tenant, setTenant, platformSettings } = useApp();
   const location = useLocation();
   const [checkingSession, setCheckingSession] = useState(Boolean(authed && token));
 
@@ -31,6 +31,7 @@ export function AppLayout() {
           // Redux and localStorage aligned with the fresh server response so a
           // browser reload does not continue showing stale cached clinic data.
           if (active && Array.isArray(session?.clinics)) setClinics(session.clinics);
+          if (active && session?.tenant) setTenant(session.tenant);
         })
         .catch((err) => {
           if (active && ["SESSION_EXPIRED", "INVALID_TOKEN", "UNAUTHENTICATED", "ACCOUNT_UNAVAILABLE"].includes(err.code)) {
@@ -49,7 +50,7 @@ export function AppLayout() {
       document.removeEventListener("visibilitychange", onVisible);
       clearInterval(id);
     };
-  }, [authed, token, logout, setClinics]);
+  }, [authed, token, logout, setClinics, setTenant]);
 
   // Keep the bell and Notifications page current on every Client Panel route.
   // The backend applies the real user's tenant, active-clinic and role filters.
@@ -80,10 +81,6 @@ export function AppLayout() {
   }
 
   const pathKey = location.pathname.replace(/^\//, "") || "dashboard";
-  // A practice with no clinics yet: the Owner can only add the first clinic
-  if (clinics.length === 0 && pathKey !== "clinics") {
-    return <Navigate to="/clinics" replace />;
-  }
   if (!canView(pathKey, role)) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -108,6 +105,9 @@ export function AppLayout() {
         <div className="flex-1 flex flex-col min-w-0 lg:h-screen lg:overflow-hidden">
           <Topbar />
           <main className="flex-1 p-3.5 sm:p-5 lg:p-[26px] overflow-auto lg:overflow-y-auto">
+            {tenant?.status === "trial" && tenant.trialEndsAt && new Date(tenant.trialEndsAt) <= new Date() && <div role="alert" className="mb-4 rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm">
+              Your practice trial has ended. Review your subscription or contact <a className="underline" href={`mailto:${platformSettings?.supportEmail || ""}`}>support</a>.
+            </div>}
             <Outlet />
           </main>
         </div>

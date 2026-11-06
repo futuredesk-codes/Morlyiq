@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Ban, Mail, Plus, RotateCcw, UserCog, Users } from "lucide-react";
 import { C } from "../constants/theme.js";
 import { Card, EmptyState, SectionHeader } from "../components/common/Card.jsx";
@@ -11,11 +11,14 @@ import { useAdmin } from "../store/useAdmin.js";
 import { fetchClientUserOptionsApi, fetchUsersApi, inviteUserApi, resendUserInvitationApi, updateUserApi } from "../services/userService.js";
 
 export default function UsersPage() {
+  const [searchParams] = useSearchParams();
+  const requestedQuery = searchParams.get("q") || "";
   const navigate = useNavigate();
   const { currentUser, users, setUsers, push, logAudit } = useAdmin();
   const [availableRoles, setAvailableRoles] = useState([]);
   const [clientOptions, setClientOptions] = useState([]);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(requestedQuery);
+  useEffect(() => { setQuery(requestedQuery); }, [requestedQuery]);
   const [inviting, setInviting] = useState(false);
   const [confirmUser, setConfirmUser] = useState(null);
   const [loading, setLoading] = useState(true);

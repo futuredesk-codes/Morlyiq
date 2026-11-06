@@ -15,10 +15,13 @@ import notificationRoutes from "./notifications/notificationRoutes.js";
 import dashboardRoutes from "./dashboard/dashboardRoutes.js";
 import claimRoutes from "./claims/claimRoutes.js";
 import eraRoutes from "./eras/eraRoutes.js";
+import { getPublicPlatformSettings, requireClientPlatformAvailable } from "../../middlewares/client/platformAccess.js";
 
 // All Client Panel (MorlyCLient) API routes. Mounted at /api/client-panel.
 // Kept separate from the Admin console routes in src/routes/admin.
 const router = express.Router();
+router.get("/platform", getPublicPlatformSettings);
+router.use(requireClientPlatformAvailable);
 
 router.use("/auth", authRoutes);
 router.use("/onboarding", onboardingRoutes);

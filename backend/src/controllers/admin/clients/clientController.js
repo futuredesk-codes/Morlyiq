@@ -7,6 +7,7 @@ import { ClientInvitation } from "../../../models/client/ClientInvitation.js";
 import { sendClientOnboardingInvite } from "../../../services/admin/emailService.js";
 import { createInvitationToken, invitationExpiry } from "../../../services/client/onboardingService.js";
 import { getStripe } from "../../../services/billing/stripeService.js";
+import { getPlatformSettings } from "../../../services/admin/platformSettingsService.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -21,6 +22,9 @@ export const getClients = async (req, res) => {
 };
 
 export const createClient = async (req, res) => {
+  if ((await getPlatformSettings()).allowSignups === false) {
+    return res.status(403).json({ success: false, code: "SIGNUPS_DISABLED", message: "New client signups are disabled in Platform Settings" });
+  }
   const name = String(req.body?.name || "").trim();
   const ownerName = String(req.body?.ownerName || "").trim();
   const email = String(req.body?.email || "").trim().toLowerCase();
@@ -136,6 +140,14 @@ export const updateClient = async (req, res) => {
   if (changes.name !== undefined) changes.name = String(changes.name).trim();
   if (changes.name === "") {
     return res.status(422).json({ success: false, code: "VALIDATION_ERROR", message: "Client name is required" });
+  }
+  if (changes.status === "trial") {
+    const existing = await Client.findById(req.params.id).select("status trialEndsAt").lean();
+    if (existing && (existing.status !== "trial" || !existing.trialEndsAt)) {
+      const settings = await getPlatformSettings();
+      changes.trialStartedAt = new Date();
+      changes.trialEndsAt = new Date(changes.trialStartedAt.getTime() + (settings.trialLengthDays ?? 14) * 86400000);
+    }
   }
 
   const client = await Client.findByIdAndUpdate(req.params.id, changes, {

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertCircle, Bell, BellOff, CheckCheck, ChevronRight, CircleCheck, Info, Menu, TriangleAlert } from "lucide-react";
 import { C } from "../../constants/theme.js";
-import { SearchBox } from "../common/FormControls.jsx";
+import { GlobalSearch } from "./GlobalSearch.jsx";
 import { IconBtn } from "../common/Button.jsx";
 import { useAdmin } from "../../store/useAdmin.js";
 import {
@@ -118,13 +118,7 @@ export function Topbar({ title }) {
 
       {/* Right: Search & Notifications */}
       <div className="flex items-center gap-3 sm:gap-4 shrink-0">
-        <div className="hidden md:block">
-          <SearchBox
-            value=""
-            onChange={() => {}}
-            placeholder="Search clients, users, leads..."
-          />
-        </div>
+        <GlobalSearch />
 
         <div className="relative" ref={dropdownRef}>
           <div className="relative">

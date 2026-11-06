@@ -9,7 +9,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { C } from "../constants/theme.js";
-import { LEAD_STATUSES, STATUS_TONE } from "../constants/navigation.js";
+import { canAdminDo, LEAD_STATUSES, STATUS_TONE } from "../constants/navigation.js";
 import { Card, SectionHeader, MiniBar } from "../components/common/Card.jsx";
 import { useAdmin } from "../store/useAdmin.js";
 import { fetchAdminDashboardStatsApi } from "../services/dashboardService.js";
@@ -28,6 +28,7 @@ const EMPTY_DASHBOARD = {
   plans: [],
   leadFunnel: [],
   recentActivity: [],
+  visibility: {},
 };
 
 const ACTIVITY_ICONS = {
@@ -39,11 +40,17 @@ const ACTIVITY_ICONS = {
 };
 
 export default function DashboardPage() {
-  const { push } = useAdmin();
+  const { push, currentUser } = useAdmin();
   const [dashboard, setDashboard] = useState(EMPTY_DASHBOARD);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [loadedFor, setLoadedFor] = useState(null);
+  const accessKey = JSON.stringify([currentUser?.id, currentUser?.role, currentUser?.client, currentUser?.permissions]);
 
   useEffect(() => {
     let active = true;
+    setLoading(true);
+    setError("");
     fetchAdminDashboardStatsApi()
       .then((data) => {
         if (active) {
@@ -52,13 +59,27 @@ export default function DashboardPage() {
             ...data,
             kpis: { ...EMPTY_DASHBOARD.kpis, ...data.kpis },
           });
+          setLoadedFor(accessKey);
         }
       })
       .catch((error) => {
-        if (active) push(`Could not load dashboard: ${error.message}`, "danger");
-      });
+        if (active) { setError(error.message); setDashboard(EMPTY_DASHBOARD); push(`Could not load dashboard: ${error.message}`, "danger"); }
+      }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [push]);
+  }, [push, accessKey]);
+
+  const visibility = loadedFor === accessKey ? dashboard.visibility : {};
+  const superAdmin = currentUser?.role === "Super Admin";
+  const show = {
+    revenue: superAdmin && visibility.revenue,
+    clients: superAdmin && visibility.clients,
+    support: superAdmin && visibility.support,
+    plans: superAdmin && visibility.plans,
+    recentActivity: superAdmin && visibility.recentActivity,
+    insurerIssues: superAdmin && visibility.insurerIssues,
+    verifications: canAdminDo(currentUser, "eligibility", "view") && visibility.verifications,
+    leads: canAdminDo(currentUser, "leads", "view") && visibility.leads,
+  };
 
   const { kpis: dashboardKpis, plans, recentActivity } = dashboard;
   const activeClients = dashboardKpis.activeClients;
@@ -71,6 +92,7 @@ export default function DashboardPage() {
 
   const kpis = [
     {
+      visible: show.revenue,
       label: "Monthly recurring revenue",
       value: `$${mrr.toLocaleString()}`,
       trend: "Current total",
@@ -78,6 +100,7 @@ export default function DashboardPage() {
       data: dashboardKpis.series?.revenue || [],
     },
     {
+      visible: show.clients,
       label: "Active clients",
       value: activeClients,
       trend: `${trialClients} on trial`,
@@ -85,6 +108,7 @@ export default function DashboardPage() {
       data: dashboardKpis.series?.activeClients || [],
     },
     {
+      visible: show.verifications,
       label: "Verifications this month",
       value: totalVerifications.toLocaleString(),
       trend: "Current month",
@@ -92,6 +116,7 @@ export default function DashboardPage() {
       data: dashboardKpis.series?.verifications || [],
     },
     {
+      visible: show.support,
       label: "Open support tickets",
       value: openTickets,
       trend: overdueInvoices
@@ -100,7 +125,7 @@ export default function DashboardPage() {
       icon: LifeBuoy,
       data: dashboardKpis.series?.tickets || [],
     },
-  ];
+  ].filter((card) => card.visible);
 
   const funnelCounts = LEAD_STATUSES.map(
     (status) => dashboard.leadFunnel.find((item) => item.status === status)?.count || 0
@@ -121,7 +146,10 @@ export default function DashboardPage() {
       />
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+      {loading && <p role="status" className="text-sm" style={{ color: C.textMute }}>Loading dashboard...</p>}
+      {error && <p role="alert" className="text-sm" style={{ color: C.danger }}>{error}</p>}
+      {!loading && !error && !Object.values(show).some(Boolean) && <Card><p className="text-sm" style={{ color: C.textMute }}>No dashboard cards are available for your current permissions.</p></Card>}
+      {kpis.length > 0 && <div className="grid gap-3.5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))" }}>
         {kpis.map((k) => (
           <Card key={k.label}>
             <div className="flex justify-between items-start">
@@ -184,11 +212,12 @@ export default function DashboardPage() {
             </div>
           </Card>
         ))}
-      </div>
+      </div>}
 
       {/* Detailed Overview Split Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-3.5">
-        <Card>
+      {(show.plans || show.leads || show.recentActivity) && <div className={`grid grid-cols-1 gap-3.5 ${((show.plans || show.leads) && show.recentActivity) ? "lg:grid-cols-[1.3fr_1fr]" : ""}`}>
+        {(show.plans || show.leads) && <Card>
+          {show.plans && <>
           <div
             style={{
               fontFamily: "Inter, sans-serif",
@@ -241,10 +270,11 @@ export default function DashboardPage() {
               );
             })}
           </div>
+          </>}
 
-          <div
-            className="mt-4 pt-3.5"
-            style={{ borderTop: `1px solid ${C.border}` }}
+          {show.leads && <div
+            className={show.plans ? "mt-4 pt-3.5" : ""}
+            style={show.plans ? { borderTop: `1px solid ${C.border}` } : undefined}
           >
             <div
               style={{
@@ -300,10 +330,10 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-          </div>
-        </Card>
+          </div>}
+        </Card>}
 
-        <Card>
+        {show.recentActivity && <Card>
           <div
             style={{
               fontFamily: "Inter, sans-serif",
@@ -360,7 +390,7 @@ export default function DashboardPage() {
               );
             })}
           </div>
-          {insurerIssues > 0 && (
+          {show.insurerIssues && insurerIssues > 0 && (
             <div
               className="mt-3.5 pt-3 text-[11.5px]"
               style={{
@@ -372,8 +402,8 @@ export default function DashboardPage() {
               {insurerIssues} insurer connection needs attention.
             </div>
           )}
-        </Card>
-      </div>
+        </Card>}
+      </div>}
     </div>
   );
 }

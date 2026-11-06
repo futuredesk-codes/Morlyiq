@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { ClientUser } from "../../../models/client/ClientUser.js";
 import { fail } from "../../../utils/client/apiResponse.js";
 import { ClientSession } from "../../../models/client/ClientSession.js";
+import { ensureTrialWindow, trialExpired } from "../../../services/client/trialService.js";
 
 const secret = () => process.env.CLIENT_JWT_SECRET || process.env.JWT_SECRET || "dev-only-change-me";
 
@@ -35,6 +36,11 @@ export const protectClient = async (req, res, next) => {
     }
     if (user.tenantId.status === "invited") {
       return fail(res, 403, "Finish client onboarding before accessing the workspace", { code: "ONBOARDING_INCOMPLETE" });
+    }
+    await ensureTrialWindow(user.tenantId);
+    const accountPath = /^\/api\/client-panel\/(?:auth\/(?:me|logout)$|account(?:\/|$)|billing(?:\/|$)|tickets(?:\/|$))/.test((req.originalUrl || "").split("?")[0]);
+    if (trialExpired(user.tenantId) && !accountPath) {
+      return fail(res, 403, "Your practice trial has ended. Contact support or review your subscription.", { code: "TRIAL_EXPIRED" });
     }
     // Remember activity for the "Active sessions" list (at most once a minute)
     if (Date.now() - session.lastActiveAt.getTime() > 60_000) {

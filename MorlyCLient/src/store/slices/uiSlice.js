@@ -4,12 +4,14 @@ const initialState = {
   sidebarOpen: false,
   sidebarCollapsed: typeof localStorage !== "undefined" ? localStorage.getItem("morlyiq_sidebar_collapsed") === "true" : false,
   toasts: [],
+  platformSettings: null,
 };
 
 export const uiSlice = createSlice({
   name: "ui",
   initialState,
   reducers: {
+    setPlatformSettings: (state, action) => { state.platformSettings = action.payload; },
     toggleSidebar: (state) => {
       state.sidebarOpen = !state.sidebarOpen;
     },
@@ -34,6 +36,7 @@ export const uiSlice = createSlice({
 });
 
 export const {
+  setPlatformSettings,
   toggleSidebar,
   setSidebarOpen,
   toggleCollapse,

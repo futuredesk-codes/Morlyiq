@@ -6,6 +6,7 @@ import {
   setViewAsRole as setViewAsRoleAction,
   setClinicId as setClinicIdAction,
   setClinics as setClinicsAction,
+  setTenant as setTenantAction,
 } from "./slices/authSlice.js";
 import {
   toggleSidebar as toggleSidebarAction,
@@ -14,6 +15,7 @@ import {
   setSidebarCollapsed as setSidebarCollapsedAction,
   addToast,
   removeToast,
+  setPlatformSettings as setPlatformSettingsAction,
 } from "./slices/uiSlice.js";
 import {
   setTickets as setTicketsAction,
@@ -43,6 +45,9 @@ export function useApp() {
   const clinics = useSelector((state) => state.auth.clinics);
   const tenant = useSelector((state) => state.auth.tenant);
   const currentUser = useSelector((state) => state.auth.currentUser);
+  const platformSettings = useSelector((state) => state.ui.platformSettings);
+  const setPlatformSettings = useCallback((settings) => dispatch(setPlatformSettingsAction(settings)), [dispatch]);
+  const setTenant = useCallback((tenant) => dispatch(setTenantAction(tenant)), [dispatch]);
 
   const sidebarOpen = useSelector((state) => state.ui.sidebarOpen);
   const sidebarCollapsed = useSelector((state) => state.ui.sidebarCollapsed);
@@ -225,6 +230,9 @@ export function useApp() {
     notifCount,
     notifItems,
     currentUser,
+    platformSettings,
+    setPlatformSettings,
+    setTenant,
   };
 }
 

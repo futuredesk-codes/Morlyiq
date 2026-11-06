@@ -26,6 +26,7 @@ export const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
+    setTenant: (state, action) => { state.tenant = action.payload; persist(state); },
     // payload: { token, user, clinics, tenant } from POST /client-panel/auth/login
     login: (state, action) => {
       const { token, user, clinics, tenant } = action.payload;
@@ -70,5 +71,5 @@ export const authSlice = createSlice({
   },
 });
 
-export const { login, logout, setClinicId, setClinics, setViewAsRole } = authSlice.actions;
+export const { login, logout, setClinicId, setClinics, setViewAsRole, setTenant } = authSlice.actions;
 export default authSlice.reducer;

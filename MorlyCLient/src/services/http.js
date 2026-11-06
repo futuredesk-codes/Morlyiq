@@ -47,6 +47,9 @@ export async function api(path, { method = "GET", body, clinicId, token, auth = 
   }
 
   const payload = await res.json().catch(() => ({}));
+  if (payload.code === "PLATFORM_MAINTENANCE" && payload.data) {
+    window.dispatchEvent(new CustomEvent("morlyiq:maintenance", { detail: payload.data }));
+  }
   if (!res.ok || payload.success === false) {
     const err = new ApiError(payload.message || `Request failed (${res.status})`, {
       status: res.status,

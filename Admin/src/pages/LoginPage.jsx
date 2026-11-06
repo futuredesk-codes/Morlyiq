@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
+import { loginDestination } from "../utils/loginDestination.js";
 import { Mail, Lock, Eye, EyeOff, ShieldCheck, ArrowRight, LayoutGrid, Users2, ListChecks } from "lucide-react";
 import { C } from "../constants/theme.js";
 import { LOGO_ICON } from "../constants/logo.js";
@@ -26,6 +27,8 @@ const HIGHLIGHTS = [
 
 export default function LoginPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const destination = loginDestination(location.state?.from);
   const { login, push, resendMfa, verifyMfa } = useAdmin();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -72,7 +75,7 @@ export default function LoginPage() {
         return;
       }
       push("Welcome back!");
-      navigate("/dashboard");
+      navigate(destination, { replace: true });
     } catch (err) {
       setError(err.message || "Sign in failed. Please try again.");
     } finally {
@@ -91,7 +94,7 @@ export default function LoginPage() {
     try {
       await verifyMfa({ mfaToken, code: mfaCode, remember });
       push("Welcome back!");
-      navigate("/dashboard");
+      navigate(destination, { replace: true });
     } catch (err) {
       setError(err.message || "Verification failed. Please try again.");
     } finally {

@@ -11,6 +11,7 @@ import { isEmailConfigured } from "../../../services/client/emailService.js";
 import { MFA_SELECT, consumeEmailCode, issueEmailCode, maskEmail } from "../../../services/client/mfaCodeService.js";
 import { logActivity } from "../../../services/client/activityService.js";
 import { attempts } from "../../../services/client/attemptGuard.js";
+import { ensureTrialWindow, trialExpired } from "../../../services/client/trialService.js";
 
 const initialsOf = (name) =>
   name.replace(/^Dr\.\s*/i, "").split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
@@ -32,6 +33,8 @@ const publicTenant = (client) => ({
   id: client.id,
   name: client.name,
   status: client.status,
+  trialEndsAt: client.trialEndsAt || null,
+  trialExpired: Boolean(trialExpired(client)),
   clinics: client.clinics,
   entitlements: Object.fromEntries(client.entitlements || []),
 });
@@ -46,6 +49,7 @@ async function completeLogin(user, req, res) {
   if (tenant.status === "invited") {
     return fail(res, 403, "Finish payment and password setup from your invitation email before signing in.", { code: "ONBOARDING_INCOMPLETE" });
   }
+  await ensureTrialWindow(tenant);
   // Which clinics this person can open, and their role at each
   const clinics = await accessibleClinics(user);
   if (!clinics.length && !isOwner(user)) {

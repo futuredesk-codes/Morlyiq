@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "test:leads": "node --test test/adminLeadWorkflow.test.js",
     "seed:admin": "node src/scripts/admin/seedSuperAdmin.js",
     "seed:admin-roles": "node src/scripts/admin/seedRoles.js",
     "seed:admin-features": "node src/scripts/admin/seedFeatures.js",
